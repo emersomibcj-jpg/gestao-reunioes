@@ -8,13 +8,36 @@ app.secret_key = "chave_super_secreta_reunioes"
 DB_NAME = "reunioes.db"
 
 USUARIOS = {
-    "emerson": "1234",
-    "davi": "1234",
-    "matthews": "1234",
-    "giovanne": "1234",
-    "rebecca": "1234",
-    "liliane": "1234",
-    "maya": "1234"
+    "emerson": {
+        "senha": "1234",
+        "nome": "Emerson",
+        "tipo": "admin"
+    },
+    "davi": {
+        "senha": "1234",
+        "nome": "Davi",
+        "tipo": "usuario"
+    },
+    "matthews": {
+        "senha": "1234",
+        "nome": "Matthews",
+        "tipo": "usuario"
+    },
+    "giovanne": {
+        "senha": "1234",
+        "nome": "Giovanne",
+        "tipo": "usuario"
+    },
+    "rebecca": {
+        "senha": "1234",
+        "nome": "Rebecca",
+        "tipo": "usuario"
+    },
+    "liliane": {
+        "senha": "1234",
+        "nome": "Liliane",
+        "tipo": "usuario"
+    }
 }
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
@@ -165,6 +188,15 @@ def buscar_reunioes(busca="", campo="Todos", data_ini="", data_fim=""):
     return filtradas
 
 
+@app.context_processor
+def inject_user():
+    return {
+        "usuario_nome": session.get("usuario_nome", ""),
+        "usuario_login": session.get("usuario_login", ""),
+        "usuario_tipo": session.get("usuario_tipo", "")
+    }
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     if session.get("logado"):
@@ -174,9 +206,11 @@ def login():
         usuario = request.form.get("usuario", "").strip().lower()
         senha = request.form.get("senha", "").strip()
 
-        if usuario in USUARIOS and USUARIOS[usuario] == senha:
+        if usuario in USUARIOS and USUARIOS[usuario]["senha"] == senha:
             session["logado"] = True
-            session["usuario"] = usuario
+            session["usuario_login"] = usuario
+            session["usuario_nome"] = USUARIOS[usuario]["nome"]
+            session["usuario_tipo"] = USUARIOS[usuario]["tipo"]
             return redirect(url_for("painel"))
 
         flash("Login ou senha incorretos.", "erro")
