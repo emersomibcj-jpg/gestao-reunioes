@@ -5,7 +5,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_reunioes"
 
-DB_NAME = "reunioes.db"
+DB_NAME = "reunioes_v2.db"
 
 USUARIOS = {
     "emerson": {"senha": "1234", "nome": "Emerson", "tipo": "admin"},
