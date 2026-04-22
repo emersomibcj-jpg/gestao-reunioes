@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% block title %}Detalhes da reunião{% endblock %}
+{% block body %}
+<div class="details-page">
+    <div class="details-card">
+        <div class="details-header">
+            <div>
+                <h1>Detalhes da reunião</h1>
+                <p>Visualização completa do registro selecionado.</p>
+            </div>
+            <a class="btn btn-muted" href="{{ url_for('painel') }}">Voltar</a>
+        </div>
+
+        <div class="details-grid">
+            <div><strong>ID:</strong> {{ reuniao.id }}</div>
+            <div><strong>Nome da reunião:</strong> {{ reuniao.nome }}</div>
+            <div><strong>Tema:</strong> {{ reuniao.tema }}</div>
+            <div><strong>Data:</strong> {{ reuniao.data_reuniao }}</div>
+            <div><strong>Horário:</strong> {{ reuniao.horario or '' }}</div>
+            <div><strong>Participantes:</strong> {{ reuniao.participantes or '' }}</div>
+            <div><strong>Status:</strong> {{ reuniao.status or '' }}</div>
+        </div>
+
+        <div class="details-section">
+            <h3>Pautas</h3>
+            <div class="text-box">{{ reuniao.pautas or '' }}</div>
+        </div>
+
+        <div class="details-section">
+            <h3>Observações</h3>
+            <div class="text-box">{{ reuniao.observacoes or '' }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

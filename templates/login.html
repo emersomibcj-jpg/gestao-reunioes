@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}Login - Gestão de Reuniões{% endblock %}
+{% block body %}
+<div class="login-page">
+    <div class="login-bg">
+        <div class="bg-overlay"></div>
+    </div>
+
+    <div class="login-card-wrap">
+        <div class="login-card">
+            <div class="brand-line">
+                <span class="brand-light">Work</span>
+                <span class="brand-strong">Meeting</span>
+                <span class="brand-icon">⚇</span>
+            </div>
+
+            <div class="welcome">
+                <span class="light">Olá, </span>
+                <span class="strong">seja bem-vindo!</span>
+            </div>
+
+            <p class="login-subtext">Acesse o sistema para organizar reuniões, pautas, status e observações.</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert {{ category }}">{{ message }}</div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <form method="post" class="login-form">
+                <label>Login</label>
+                <input type="text" name="usuario" placeholder="Digite seu usuário" required>
+
+                <label>Senha</label>
+                <input type="password" name="senha" placeholder="Digite sua senha" required>
+
+                <button type="submit" class="btn btn-light big">Acessar</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
