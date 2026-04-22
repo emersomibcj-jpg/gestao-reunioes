@@ -10,6 +10,12 @@ LOGIN_USUARIO = "emerson"
 LOGIN_SENHA = "1234"
 LOGIN_USUARIO = "davi"
 LOGIN_SENHA = "1234"
+LOGIN_USUARIO = "matthews"
+LOGIN_SENHA = "1234"
+LOGIN_USUARIO = "giovanne"
+LOGIN_SENHA = "1234"
+LOGIN_USUARIO = "rebecca"
+LOGIN_SENHA = "1234"
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
 
