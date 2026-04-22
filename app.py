@@ -13,7 +13,8 @@ USUARIOS = {
     "matthews": "1234",
     "giovanne": "1234",
     "rebecca": "1234",
-    "liliane": "1234"
+    "liliane": "1234",
+    "maya": "1234"
 }
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
