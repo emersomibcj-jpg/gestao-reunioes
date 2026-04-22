@@ -6,25 +6,24 @@ app = Flask(__name__)
 app.secret_key = "chave_super_secreta_reunioes"
 
 DB_NAME = "reunioes.db"
-LOGIN_USUARIO = "emerson"
-LOGIN_SENHA = "1234"
-LOGIN_USUARIO = "davi"
-LOGIN_SENHA = "1234"
-LOGIN_USUARIO = "matthews"
-LOGIN_SENHA = "1234"
-LOGIN_USUARIO = "giovanne"
-LOGIN_SENHA = "1234"
-LOGIN_USUARIO = "rebecca"
-LOGIN_SENHA = "1234"
-LOGIN_USUARIO = "liliane"
-LOGIN_SENHA = "1234"
+
+USUARIOS = {
+    "emerson": "1234",
+    "davi": "1234",
+    "matthews": "1234",
+    "giovanne": "1234",
+    "rebecca": "1234",
+    "liliane": "1234"
+}
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
+
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def criar_tabelas():
     conn = get_db()
@@ -45,6 +44,7 @@ def criar_tabelas():
     conn.commit()
     conn.close()
 
+
 def validar_data(texto, obrigatoria=True):
     if not texto.strip():
         return not obrigatoria
@@ -54,6 +54,7 @@ def validar_data(texto, obrigatoria=True):
     except ValueError:
         return False
 
+
 def validar_horario(texto):
     if not texto.strip():
         return True
@@ -62,6 +63,7 @@ def validar_horario(texto):
         return True
     except ValueError:
         return False
+
 
 def reuniao_duplicada(nome, tema, data, horario, ignorar_id=None):
     conn = get_db()
@@ -81,6 +83,7 @@ def reuniao_duplicada(nome, tema, data, horario, ignorar_id=None):
     conn.close()
     return row is not None
 
+
 def contar_status():
     conn = get_db()
     cur = conn.cursor()
@@ -95,6 +98,7 @@ def contar_status():
         "pausa": pausa,
         "concluida": concluida
     }
+
 
 def buscar_reunioes(busca="", campo="Todos", data_ini="", data_fim=""):
     consulta = """
@@ -159,26 +163,31 @@ def buscar_reunioes(busca="", campo="Todos", data_ini="", data_fim=""):
         filtradas.append(row)
     return filtradas
 
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     if session.get("logado"):
         return redirect(url_for("painel"))
 
     if request.method == "POST":
-        usuario = request.form.get("usuario", "").strip()
+        usuario = request.form.get("usuario", "").strip().lower()
         senha = request.form.get("senha", "").strip()
 
-        if usuario == LOGIN_USUARIO and senha == LOGIN_SENHA:
+        if usuario in USUARIOS and USUARIOS[usuario] == senha:
             session["logado"] = True
+            session["usuario"] = usuario
             return redirect(url_for("painel"))
+
         flash("Login ou senha incorretos.", "erro")
 
     return render_template("login.html")
+
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
 
 @app.route("/painel")
 def painel():
@@ -218,6 +227,7 @@ def painel():
         registro_edicao=registro_edicao,
         status_lista=STATUS_LISTA
     )
+
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
@@ -277,6 +287,7 @@ def salvar():
     conn.close()
     return redirect(url_for("painel"))
 
+
 @app.route("/excluir/<int:reuniao_id>", methods=["POST"])
 def excluir(reuniao_id):
     if not session.get("logado"):
@@ -288,6 +299,7 @@ def excluir(reuniao_id):
     conn.close()
     flash("Reunião excluída com sucesso.", "sucesso")
     return redirect(url_for("painel"))
+
 
 @app.route("/detalhes/<int:reuniao_id>")
 def detalhes(reuniao_id):
@@ -304,6 +316,7 @@ def detalhes(reuniao_id):
 
     return render_template("detalhes.html", reuniao=reuniao)
 
+
 if __name__ == "__main__":
     criar_tabelas()
-    app.run(debug=True)
+    app.run()
