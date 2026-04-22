@@ -8,40 +8,13 @@ app.secret_key = "chave_super_secreta_reunioes"
 DB_NAME = "reunioes.db"
 
 USUARIOS = {
-    "emerson": {
-        "senha": "1234",
-        "nome": "Emerson",
-        "tipo": "admin"
-    },
-    "davi": {
-        "senha": "1234",
-        "nome": "Davi",
-        "tipo": "usuario"
-    },
-    "matthews": {
-        "senha": "1234",
-        "nome": "Matthews",
-        "tipo": "usuario"
-    },
-    "giovanne": {
-        "senha": "1234",
-        "nome": "Giovanne",
-        "tipo": "usuario"
-    },
-    "rebecca": {
-        "senha": "1234",
-        "nome": "Rebecca",
-        "tipo": "usuario"
-    },
-    "liliane": {
-        "senha": "1234",
-        "nome": "Liliane",
-        "tipo": "usuario"
-    },
-    "maya": {
-        "senha": "1234",
-        "nome": "Maya",
-        "tipo": "usuario"
+    "emerson": {"senha": "1234", "nome": "Emerson", "tipo": "admin"},
+    "davi": {"senha": "1234", "nome": "Davi", "tipo": "usuario"},
+    "matthews": {"senha": "1234", "nome": "Matthews", "tipo": "usuario"},
+    "giovanne": {"senha": "1234", "nome": "Giovanne", "tipo": "usuario"},
+    "rebecca": {"senha": "1234", "nome": "Rebecca", "tipo": "usuario"},
+    "liliane": {"senha": "1234", "nome": "Liliane", "tipo": "usuario"},
+    "maya": {"senha": "1234", "nome": "Maya", "tipo": "usuario"}
 }
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
@@ -58,6 +31,7 @@ def criar_tabelas():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS reunioes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT NOT NULL,
             nome TEXT NOT NULL,
             tema TEXT NOT NULL,
             data_reuniao TEXT NOT NULL,
@@ -93,131 +67,105 @@ def validar_horario(texto):
         return False
 
 
-def reuniao_duplicada(nome, tema, data, horario, ignorar_id=None):
+def reuniao_duplicada(nome, tema, data, horario, usuario, ignorar_id=None):
     conn = get_db()
     cur = conn.cursor()
+
     if ignorar_id:
         cur.execute("""
             SELECT id FROM reunioes
-            WHERE nome = ? AND tema = ? AND data_reuniao = ? AND IFNULL(horario,'') = IFNULL(?, '')
-              AND id <> ?
-        """, (nome, tema, data, horario, ignorar_id))
+            WHERE nome=? AND tema=? AND data_reuniao=? 
+            AND IFNULL(horario,'')=IFNULL(?, '')
+            AND usuario=? AND id<>?
+        """, (nome, tema, data, horario, usuario, ignorar_id))
     else:
         cur.execute("""
             SELECT id FROM reunioes
-            WHERE nome = ? AND tema = ? AND data_reuniao = ? AND IFNULL(horario,'') = IFNULL(?, '')
-        """, (nome, tema, data, horario))
+            WHERE nome=? AND tema=? AND data_reuniao=? 
+            AND IFNULL(horario,'')=IFNULL(?, '')
+            AND usuario=?
+        """, (nome, tema, data, horario, usuario))
+
     row = cur.fetchone()
     conn.close()
     return row is not None
 
 
 def contar_status():
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
     conn = get_db()
     cur = conn.cursor()
-    total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
-    andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
-    pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
-    concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
+
+    if tipo == "admin":
+        total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
+    else:
+        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (usuario,)).fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (usuario,)).fetchone()[0]
+
     conn.close()
-    return {
-        "total": total,
-        "andamento": andamento,
-        "pausa": pausa,
-        "concluida": concluida
-    }
+
+    return {"total": total, "andamento": andamento, "pausa": pausa, "concluida": concluida}
 
 
 def buscar_reunioes(busca="", campo="Todos", data_ini="", data_fim=""):
-    consulta = """
-        SELECT id, nome, tema, data_reuniao, horario, status, participantes
-        FROM reunioes
-        WHERE 1=1
-    """
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
+    consulta = "SELECT * FROM reunioes WHERE 1=1"
     params = []
 
-    if busca:
-        mapa = {
-            "Nome": "nome",
-            "Tema": "tema",
-            "Data": "data_reuniao",
-            "Participantes": "participantes",
-            "Status": "status"
-        }
-        if campo == "Todos":
-            termo = f"%{busca}%"
-            consulta += """
-                AND (
-                    nome LIKE ?
-                    OR tema LIKE ?
-                    OR data_reuniao LIKE ?
-                    OR participantes LIKE ?
-                    OR status LIKE ?
-                    OR pautas LIKE ?
-                    OR observacoes LIKE ?
-                )
-            """
-            params.extend([termo] * 7)
-        elif campo in mapa:
-            consulta += f" AND {mapa[campo]} LIKE ?"
-            params.append(f"%{busca}%")
+    if tipo != "admin":
+        consulta += " AND usuario=?"
+        params.append(usuario)
 
-    consulta += """
-        ORDER BY substr(data_reuniao, 7, 4) DESC,
-                 substr(data_reuniao, 4, 2) DESC,
-                 substr(data_reuniao, 1, 2) DESC,
-                 id DESC
-    """
+    if busca:
+        termo = f"%{busca}%"
+        consulta += """
+        AND (
+            nome LIKE ? OR tema LIKE ? OR data_reuniao LIKE ? 
+            OR participantes LIKE ? OR status LIKE ?
+        )
+        """
+        params.extend([termo]*5)
+
+    consulta += " ORDER BY id DESC"
 
     conn = get_db()
-    cur = conn.cursor()
-    rows = cur.execute(consulta, params).fetchall()
+    rows = conn.execute(consulta, params).fetchall()
     conn.close()
 
-    filtradas = []
-    for row in rows:
-        try:
-            dt = datetime.strptime(row["data_reuniao"], "%d/%m/%Y")
-            if data_ini:
-                ini = datetime.strptime(data_ini, "%d/%m/%Y")
-                if dt < ini:
-                    continue
-            if data_fim:
-                fim = datetime.strptime(data_fim, "%d/%m/%Y")
-                if dt > fim:
-                    continue
-        except Exception:
-            pass
-        filtradas.append(row)
-    return filtradas
+    return rows
 
 
 @app.context_processor
 def inject_user():
-    return {
-        "usuario_nome": session.get("usuario_nome", ""),
-        "usuario_login": session.get("usuario_login", ""),
-        "usuario_tipo": session.get("usuario_tipo", "")
-    }
+    return dict(
+        usuario_nome=session.get("usuario_nome"),
+        usuario_tipo=session.get("usuario_tipo")
+    )
 
 
 @app.route("/", methods=["GET", "POST"])
 def login():
-    if session.get("logado"):
-        return redirect(url_for("painel"))
-
     if request.method == "POST":
-        usuario = request.form.get("usuario", "").strip().lower()
-        senha = request.form.get("senha", "").strip()
+        user = request.form["usuario"].lower()
+        senha = request.form["senha"]
 
-        if usuario in USUARIOS and USUARIOS[usuario]["senha"] == senha:
+        if user in USUARIOS and USUARIOS[user]["senha"] == senha:
             session["logado"] = True
-            session["usuario_login"] = usuario
-            session["usuario_nome"] = USUARIOS[usuario]["nome"]
-            session["usuario_tipo"] = USUARIOS[usuario]["tipo"]
+            session["usuario_login"] = user
+            session["usuario_nome"] = USUARIOS[user]["nome"]
+            session["usuario_tipo"] = USUARIOS[user]["tipo"]
             return redirect(url_for("painel"))
 
-        flash("Login ou senha incorretos.", "erro")
+        flash("Login inválido", "erro")
 
     return render_template("login.html")
 
@@ -233,39 +181,10 @@ def painel():
     if not session.get("logado"):
         return redirect(url_for("login"))
 
-    busca = request.args.get("busca", "").strip()
-    campo = request.args.get("campo", "Todos")
-    data_ini = request.args.get("data_ini", "").strip()
-    data_fim = request.args.get("data_fim", "").strip()
-    editar_id = request.args.get("editar_id", "").strip()
-
-    if data_ini and not validar_data(data_ini, obrigatoria=False):
-        flash("Data inicial inválida. Use dd/mm/aaaa.", "erro")
-        data_ini = ""
-    if data_fim and not validar_data(data_fim, obrigatoria=False):
-        flash("Data final inválida. Use dd/mm/aaaa.", "erro")
-        data_fim = ""
-
-    reunioes = buscar_reunioes(busca, campo, data_ini, data_fim)
+    reunioes = buscar_reunioes()
     indicadores = contar_status()
 
-    registro_edicao = None
-    if editar_id:
-        conn = get_db()
-        registro_edicao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (editar_id,)).fetchone()
-        conn.close()
-
-    return render_template(
-        "painel.html",
-        reunioes=reunioes,
-        indicadores=indicadores,
-        campo=campo,
-        busca=busca,
-        data_ini=data_ini,
-        data_fim=data_fim,
-        registro_edicao=registro_edicao,
-        status_lista=STATUS_LISTA
-    )
+    return render_template("painel.html", reunioes=reunioes, indicadores=indicadores, status_lista=STATUS_LISTA)
 
 
 @app.route("/salvar", methods=["POST"])
@@ -273,57 +192,42 @@ def salvar():
     if not session.get("logado"):
         return redirect(url_for("login"))
 
-    reuniao_id = request.form.get("reuniao_id", "").strip()
-    nome = request.form.get("nome", "").strip()
-    tema = request.form.get("tema", "").strip()
-    data = request.form.get("data", "").strip()
-    horario = request.form.get("horario", "").strip()
-    participantes = request.form.get("participantes", "").strip()
-    status = request.form.get("status", "Planejada").strip()
-    pautas = request.form.get("pautas", "").strip()
-    observacoes = request.form.get("observacoes", "").strip()
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
 
-    if not nome or not tema or not data:
-        flash("Preencha nome da reunião, tema e data.", "erro")
-        return redirect(url_for("painel", editar_id=reuniao_id if reuniao_id else ""))
-
-    if not validar_data(data):
-        flash("Data inválida. Use o formato dd/mm/aaaa.", "erro")
-        return redirect(url_for("painel", editar_id=reuniao_id if reuniao_id else ""))
-
-    if not validar_horario(horario):
-        flash("Horário inválido. Use o formato hh:mm.", "erro")
-        return redirect(url_for("painel", editar_id=reuniao_id if reuniao_id else ""))
+    reuniao_id = request.form.get("reuniao_id")
+    nome = request.form["nome"]
+    tema = request.form["tema"]
+    data = request.form["data"]
+    horario = request.form["horario"]
+    participantes = request.form["participantes"]
+    status = request.form["status"]
+    pautas = request.form["pautas"]
+    observacoes = request.form["observacoes"]
 
     conn = get_db()
     cur = conn.cursor()
 
     if reuniao_id:
-        if reuniao_duplicada(nome, tema, data, horario, ignorar_id=reuniao_id):
-            conn.close()
-            flash("Já existe outra reunião com o mesmo nome, tema, data e horário.", "erro")
-            return redirect(url_for("painel", editar_id=reuniao_id))
-
-        cur.execute("""
-            UPDATE reunioes
-            SET nome=?, tema=?, data_reuniao=?, horario=?, participantes=?, status=?, pautas=?, observacoes=?
-            WHERE id=?
-        """, (nome, tema, data, horario, participantes, status, pautas, observacoes, reuniao_id))
-        flash("Reunião atualizada com sucesso.", "sucesso")
+        if tipo == "admin":
+            cur.execute("""
+                UPDATE reunioes SET nome=?, tema=?, data_reuniao=?, horario=?, participantes=?, status=?, pautas=?, observacoes=?
+                WHERE id=?
+            """, (nome, tema, data, horario, participantes, status, pautas, observacoes, reuniao_id))
+        else:
+            cur.execute("""
+                UPDATE reunioes SET nome=?, tema=?, data_reuniao=?, horario=?, participantes=?, status=?, pautas=?, observacoes=?
+                WHERE id=? AND usuario=?
+            """, (nome, tema, data, horario, participantes, status, pautas, observacoes, reuniao_id, usuario))
     else:
-        if reuniao_duplicada(nome, tema, data, horario):
-            conn.close()
-            flash("Já existe uma reunião com o mesmo nome, tema, data e horário.", "erro")
-            return redirect(url_for("painel"))
-
         cur.execute("""
-            INSERT INTO reunioes (nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (nome, tema, data, horario, participantes, status, pautas, observacoes))
-        flash("Reunião cadastrada com sucesso.", "sucesso")
+            INSERT INTO reunioes (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (usuario, nome, tema, data, horario, participantes, status, pautas, observacoes))
 
     conn.commit()
     conn.close()
+
     return redirect(url_for("painel"))
 
 
@@ -332,11 +236,19 @@ def excluir(reuniao_id):
     if not session.get("logado"):
         return redirect(url_for("login"))
 
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
     conn = get_db()
-    conn.execute("DELETE FROM reunioes WHERE id = ?", (reuniao_id,))
+
+    if tipo == "admin":
+        conn.execute("DELETE FROM reunioes WHERE id=?", (reuniao_id,))
+    else:
+        conn.execute("DELETE FROM reunioes WHERE id=? AND usuario=?", (reuniao_id, usuario))
+
     conn.commit()
     conn.close()
-    flash("Reunião excluída com sucesso.", "sucesso")
+
     return redirect(url_for("painel"))
 
 
@@ -345,12 +257,20 @@ def detalhes(reuniao_id):
     if not session.get("logado"):
         return redirect(url_for("login"))
 
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
     conn = get_db()
-    reuniao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (reuniao_id,)).fetchone()
+
+    if tipo == "admin":
+        reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+    else:
+        reuniao = conn.execute("SELECT * FROM reunioes WHERE id=? AND usuario=?", (reuniao_id, usuario)).fetchone()
+
     conn.close()
 
     if not reuniao:
-        flash("Reunião não encontrada.", "erro")
+        flash("Acesso negado", "erro")
         return redirect(url_for("painel"))
 
     return render_template("detalhes.html", reuniao=reuniao)
@@ -358,4 +278,4 @@ def detalhes(reuniao_id):
 
 if __name__ == "__main__":
     criar_tabelas()
-    app.run()
+    app.run(debug=True)
