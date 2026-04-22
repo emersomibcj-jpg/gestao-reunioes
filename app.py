@@ -37,7 +37,11 @@ USUARIOS = {
         "senha": "1234",
         "nome": "Liliane",
         "tipo": "usuario"
-    }
+    },
+    "maya": {
+        "senha": "1234",
+        "nome": "Maya",
+        "tipo": "usuario"
 }
 
 STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
