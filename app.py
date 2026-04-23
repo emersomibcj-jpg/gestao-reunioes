@@ -60,7 +60,6 @@ def buscar_reunioes(filtro_usuario=None):
     if tipo == "admin" and filtro_usuario:
         consulta += " AND usuario=?"
         params.append(filtro_usuario)
-
     elif tipo != "admin":
         consulta += " AND usuario=?"
         params.append(usuario)
@@ -120,7 +119,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-# 🔥 ALTERAÇÃO AQUI
 @app.route("/painel")
 def painel():
     if not session.get("logado"):
@@ -134,7 +132,7 @@ def painel():
         reunioes=reunioes,
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
-        usuarios=USUARIOS  # 👈 enviando usuários pro HTML
+        usuarios=USUARIOS  # 🔥 CORREÇÃO AQUI
     )
 
 
@@ -154,7 +152,7 @@ def ver_usuario(usuario):
         reunioes=reunioes,
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
-        usuarios=USUARIOS  # 👈 importante também aqui
+        usuarios=USUARIOS  # 🔥 CORREÇÃO AQUI TAMBÉM
     )
 
 
