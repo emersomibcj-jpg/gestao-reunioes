@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_reunioes"
@@ -33,8 +32,8 @@ def criar_tabelas():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario TEXT NOT NULL,
             nome TEXT NOT NULL,
-            tema TEXT NOT NULL,
-            data_reuniao TEXT NOT NULL,
+            tema TEXT,
+            data_reuniao TEXT,
             horario TEXT,
             participantes TEXT,
             status TEXT,
@@ -98,8 +97,8 @@ def contar_status():
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = request.form["usuario"].lower()
-        senha = request.form["senha"]
+        user = request.form.get("usuario", "").lower()
+        senha = request.form.get("senha", "")
 
         if user in USUARIOS and USUARIOS[user]["senha"] == senha:
             session["logado"] = True
@@ -133,8 +132,6 @@ def painel():
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
         usuarios=USUARIOS,
-
-        # 🔥 evita erro no HTML
         busca="",
         campo="Todos",
         data_ini="",
@@ -148,8 +145,7 @@ def ver_usuario(usuario):
     if not session.get("logado"):
         return redirect(url_for("login"))
 
-    # 🔥 AJUSTE AQUI (mais seguro)
-    if session.get("usuario_tipo", "") != "admin":
+    if session.get("usuario_tipo") != "admin":
         return redirect(url_for("painel"))
 
     reunioes = buscar_reunioes(filtro_usuario=usuario)
@@ -161,8 +157,6 @@ def ver_usuario(usuario):
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
         usuarios=USUARIOS,
-
-        # 🔥 evita erro no HTML
         busca="",
         campo="Todos",
         data_ini="",
@@ -178,25 +172,34 @@ def salvar():
 
     usuario = session.get("usuario_login")
 
+    # 🔥 CORREÇÃO PRINCIPAL (sem erro 400)
+    nome = request.form.get("nome")
+    tema = request.form.get("tema", "")
+    data = request.form.get("data", "")
+    horario = request.form.get("horario", "")
+    participantes = request.form.get("participantes", "")
+    status = request.form.get("status", "Planejada")
+    pautas = request.form.get("pautas", "")
+    observacoes = request.form.get("observacoes", "")
+
+    if not nome:
+        flash("Nome da reunião é obrigatório", "erro")
+        return redirect(url_for("painel"))
+
     conn = get_db()
     conn.execute("""
-        INSERT INTO reunioes (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
+        INSERT INTO reunioes
+        (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        usuario,
-        request.form["nome"],
-        request.form["tema"],
-        request.form["data"],
-        request.form["horario"],
-        request.form["participantes"],
-        request.form["status"],
-        request.form["pautas"],
-        request.form["observacoes"]
+        usuario, nome, tema, data, horario,
+        participantes, status, pautas, observacoes
     ))
 
     conn.commit()
     conn.close()
 
+    flash("Reunião salva com sucesso!", "sucesso")
     return redirect(url_for("painel"))
 
 
@@ -210,6 +213,7 @@ def excluir(reuniao_id):
     conn.commit()
     conn.close()
 
+    flash("Reunião excluída!", "sucesso")
     return redirect(url_for("painel"))
 
 
