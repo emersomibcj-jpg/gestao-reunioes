@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_reunioes"
@@ -41,6 +40,10 @@ def criar_tabelas():
     conn.commit()
     conn.close()
 
+# 🔥 ESSA LINHA RESOLVE SEU ERRO
+criar_tabelas()
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -58,6 +61,7 @@ def login():
 
     return render_template("login.html")
 
+
 @app.route("/painel")
 def painel():
     if not session.get("logado"):
@@ -66,7 +70,6 @@ def painel():
     conn = get_db()
     tipo = session.get("usuario_tipo")
 
-    # 🔥 AQUI está a mudança que você queria
     if tipo == "admin":
         reunioes = conn.execute("SELECT * FROM reunioes").fetchall()
         usuarios = conn.execute("SELECT DISTINCT usuario FROM reunioes").fetchall()
@@ -79,6 +82,7 @@ def painel():
 
     return render_template("painel.html", reunioes=reunioes, usuarios=usuarios)
 
+
 @app.route("/filtrar/<usuario>")
 def filtrar(usuario):
     if not session.get("logado"):
@@ -89,6 +93,7 @@ def filtrar(usuario):
     conn.close()
 
     return render_template("painel.html", reunioes=reunioes, usuarios=[])
+
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
@@ -111,11 +116,12 @@ def salvar():
 
     return redirect(url_for("painel"))
 
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
+
 if __name__ == "__main__":
-    criar_tabelas()
     app.run(debug=True)
