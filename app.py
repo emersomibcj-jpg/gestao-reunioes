@@ -132,7 +132,14 @@ def painel():
         reunioes=reunioes,
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
-        usuarios=USUARIOS  # 🔥 CORREÇÃO AQUI
+        usuarios=USUARIOS,
+
+        # 🔥 ESSENCIAL PRA NÃO QUEBRAR HTML
+        busca="",
+        campo="Todos",
+        data_ini="",
+        data_fim="",
+        registro_edicao=None
     )
 
 
@@ -152,7 +159,14 @@ def ver_usuario(usuario):
         reunioes=reunioes,
         indicadores=indicadores,
         status_lista=STATUS_LISTA,
-        usuarios=USUARIOS  # 🔥 CORREÇÃO AQUI TAMBÉM
+        usuarios=USUARIOS,
+
+        # 🔥 ESSENCIAL AQUI TAMBÉM
+        busca="",
+        campo="Todos",
+        data_ini="",
+        data_fim="",
+        registro_edicao=None
     )
 
 
