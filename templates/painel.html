@@ -8,6 +8,9 @@
         <div>
             <h1>Gestão de Reuniões</h1>
             <p>Organize reuniões, acompanhe status e localize pautas com rapidez.</p>
+            <p style="margin-top:8px; color:#123b6d; font-weight:600;">
+                Olá, {{ usuario_nome }}{% if usuario_tipo == "admin" %} — Administrador{% endif %}
+            </p>
         </div>
         <a class="btn btn-muted" href="{{ url_for('logout') }}">Encerrar sessão</a>
     </header>
@@ -22,7 +25,6 @@
     {% endif %}
     {% endwith %}
 
-    <!-- CARDS -->
     <section class="cards-grid">
         <div class="metric-card">
             <div class="metric-title">Total</div>
@@ -43,24 +45,24 @@
     </section>
 
     <section class="content-grid">
-
-        <!-- ESQUERDA -->
         <div class="left-panel">
 
-            {% if session.usuario_tipo == "admin" %}
+            {% if usuario_tipo == "admin" %}
             <div class="panel">
                 <div class="panel-title">Filtrar por usuário</div>
-                <select class="input"
-                        onchange="if(this.value) window.location.href='/usuario/' + this.value">
-                    <option value="">Selecionar</option>
-                    {% for user, dados in usuarios.items() %}
-                    <option value="{{ user }}">{{ dados.nome }}</option>
-                    {% endfor %}
-                </select>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <select class="input" onchange="if(this.value) window.location.href='/usuario/' + this.value">
+                        <option value="">Selecionar</option>
+                        {% for user, dados in usuarios.items() %}
+                        <option value="{{ user }}" {% if usuario_filtro == user %}selected{% endif %}>{{ dados.nome }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <a class="btn btn-muted" href="{{ url_for('limpar_filtro') }}">Limpar filtro</a>
+                </div>
             </div>
             {% endif %}
 
-            <!-- TABELA -->
             <div class="panel table-panel">
                 <div class="panel-title">Reuniões</div>
 
@@ -85,14 +87,8 @@
                             <td>{{ r.data_reuniao }}</td>
                             <td>{{ r.status }}</td>
                             <td>
-
-                                <!-- VER -->
                                 <a href="{{ url_for('detalhes', reuniao_id=r.id) }}">Ver</a>
-
-                                <!-- EDITAR -->
                                 <a href="{{ url_for('painel', editar_id=r.id) }}">Editar</a>
-
-                                <!-- EXCLUIR -->
                                 <form method="post"
                                       action="{{ url_for('excluir', reuniao_id=r.id) }}"
                                       style="display:inline;">
@@ -101,7 +97,6 @@
                                         Excluir
                                     </button>
                                 </form>
-
                             </td>
                         </tr>
                         {% else %}
@@ -115,7 +110,6 @@
 
         </div>
 
-        <!-- DIREITA (FORMULÁRIO) -->
         <div class="right-panel">
             <div class="panel form-panel">
 
@@ -124,7 +118,6 @@
                 </div>
 
                 <form method="post" action="{{ url_for('salvar') }}">
-
                     <input type="hidden" name="reuniao_id"
                            value="{{ registro_edicao.id if registro_edicao else '' }}">
 
@@ -136,14 +129,14 @@
 
                     <div class="field">
                         <label>Tema</label>
-                        <input type="text" name="tema"
+                        <input type="text" name="tema" required
                                value="{{ registro_edicao.tema if registro_edicao else '' }}">
                     </div>
 
                     <div class="row">
                         <div class="field">
                             <label>Data</label>
-                            <input type="date" name="data"
+                            <input type="text" name="data" placeholder="dd/mm/aaaa"
                                    value="{{ registro_edicao.data_reuniao if registro_edicao else '' }}">
                         </div>
 
@@ -183,22 +176,16 @@
                     </div>
 
                     <div style="display:flex; gap:10px; margin-top:10px;">
-                        <button type="submit" class="btn btn-primary">
-                            Salvar
-                        </button>
+                        <button type="submit" class="btn btn-primary">Salvar</button>
 
                         {% if registro_edicao %}
-                        <a href="{{ url_for('painel') }}" class="btn btn-muted">
-                            Cancelar
-                        </a>
+                        <a href="{{ url_for('painel') }}" class="btn btn-muted">Cancelar</a>
                         {% endif %}
                     </div>
-
                 </form>
 
             </div>
         </div>
-
     </section>
 </div>
 {% endblock %}
