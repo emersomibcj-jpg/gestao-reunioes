@@ -50,27 +50,6 @@ def criar_tabelas():
 criar_tabelas()
 
 
-def validar_data(texto, obrigatoria=True):
-    if not texto.strip():
-        return not obrigatoria
-    try:
-        datetime.strptime(texto.strip(), "%d/%m/%Y")
-        return True
-    except ValueError:
-        return False
-
-
-def validar_horario(texto):
-    if not texto.strip():
-        return True
-    try:
-        datetime.strptime(texto.strip(), "%H:%M")
-        return True
-    except ValueError:
-        return False
-
-
-# 🔥 ALTERAÇÃO AQUI (aceita filtro)
 def buscar_reunioes(filtro_usuario=None):
     usuario = session.get("usuario_login")
     tipo = session.get("usuario_tipo")
@@ -141,6 +120,7 @@ def logout():
     return redirect(url_for("login"))
 
 
+# 🔥 ALTERAÇÃO AQUI
 @app.route("/painel")
 def painel():
     if not session.get("logado"):
@@ -153,11 +133,11 @@ def painel():
         "painel.html",
         reunioes=reunioes,
         indicadores=indicadores,
-        status_lista=STATUS_LISTA
+        status_lista=STATUS_LISTA,
+        usuarios=USUARIOS  # 👈 enviando usuários pro HTML
     )
 
 
-# 🔥 NOVA ROTA (ESSENCIAL)
 @app.route("/usuario/<usuario>")
 def ver_usuario(usuario):
     if not session.get("logado"):
@@ -173,7 +153,8 @@ def ver_usuario(usuario):
         "painel.html",
         reunioes=reunioes,
         indicadores=indicadores,
-        status_lista=STATUS_LISTA
+        status_lista=STATUS_LISTA,
+        usuarios=USUARIOS  # 👈 importante também aqui
     )
 
 
