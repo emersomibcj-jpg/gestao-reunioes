@@ -50,6 +50,27 @@ def criar_tabelas():
 criar_tabelas()
 
 
+def validar_data(texto, obrigatoria=True):
+    if not texto.strip():
+        return not obrigatoria
+    try:
+        datetime.strptime(texto.strip(), "%d/%m/%Y")
+        return True
+    except ValueError:
+        return False
+
+
+def validar_horario(texto):
+    if not texto.strip():
+        return True
+    try:
+        datetime.strptime(texto.strip(), "%H:%M")
+        return True
+    except ValueError:
+        return False
+
+
+# 🔥 ALTERAÇÃO AQUI (aceita filtro)
 def buscar_reunioes(filtro_usuario=None):
     usuario = session.get("usuario_login")
     tipo = session.get("usuario_tipo")
@@ -57,7 +78,6 @@ def buscar_reunioes(filtro_usuario=None):
     consulta = "SELECT * FROM reunioes WHERE 1=1"
     params = []
 
-    # 🔥 FILTRO POR USUÁRIO (ADMIN)
     if tipo == "admin" and filtro_usuario:
         consulta += " AND usuario=?"
         params.append(filtro_usuario)
@@ -75,6 +95,28 @@ def buscar_reunioes(filtro_usuario=None):
     return rows
 
 
+def contar_status():
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    if tipo == "admin":
+        total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
+    else:
+        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (usuario,)).fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (usuario,)).fetchone()[0]
+
+    conn.close()
+    return {"total": total, "andamento": andamento, "pausa": pausa, "concluida": concluida}
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -88,7 +130,7 @@ def login():
             session["usuario_tipo"] = USUARIOS[user]["tipo"]
             return redirect(url_for("painel"))
 
-        flash("Login inválido")
+        flash("Login inválido", "erro")
 
     return render_template("login.html")
 
@@ -105,10 +147,17 @@ def painel():
         return redirect(url_for("login"))
 
     reunioes = buscar_reunioes()
-    return render_template("painel.html", reunioes=reunioes, status_lista=STATUS_LISTA)
+    indicadores = contar_status()
+
+    return render_template(
+        "painel.html",
+        reunioes=reunioes,
+        indicadores=indicadores,
+        status_lista=STATUS_LISTA
+    )
 
 
-# 🔥🔥🔥 ESSA É A PARTE QUE FALTAVA (A CAUSA DO ERRO)
+# 🔥 NOVA ROTA (ESSENCIAL)
 @app.route("/usuario/<usuario>")
 def ver_usuario(usuario):
     if not session.get("logado"):
@@ -118,8 +167,14 @@ def ver_usuario(usuario):
         return redirect(url_for("painel"))
 
     reunioes = buscar_reunioes(filtro_usuario=usuario)
+    indicadores = contar_status()
 
-    return render_template("painel.html", reunioes=reunioes, status_lista=STATUS_LISTA)
+    return render_template(
+        "painel.html",
+        reunioes=reunioes,
+        indicadores=indicadores,
+        status_lista=STATUS_LISTA
+    )
 
 
 @app.route("/salvar", methods=["POST"])
@@ -144,6 +199,7 @@ def salvar():
         request.form["pautas"],
         request.form["observacoes"]
     ))
+
     conn.commit()
     conn.close()
 
