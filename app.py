@@ -134,7 +134,7 @@ def painel():
         status_lista=STATUS_LISTA,
         usuarios=USUARIOS,
 
-        # 🔥 ESSENCIAL PRA NÃO QUEBRAR HTML
+        # 🔥 evita erro no HTML
         busca="",
         campo="Todos",
         data_ini="",
@@ -148,7 +148,8 @@ def ver_usuario(usuario):
     if not session.get("logado"):
         return redirect(url_for("login"))
 
-    if session.get("usuario_tipo") != "admin":
+    # 🔥 AJUSTE AQUI (mais seguro)
+    if session.get("usuario_tipo", "") != "admin":
         return redirect(url_for("painel"))
 
     reunioes = buscar_reunioes(filtro_usuario=usuario)
@@ -161,7 +162,7 @@ def ver_usuario(usuario):
         status_lista=STATUS_LISTA,
         usuarios=USUARIOS,
 
-        # 🔥 ESSENCIAL AQUI TAMBÉM
+        # 🔥 evita erro no HTML
         busca="",
         campo="Todos",
         data_ini="",
