@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, session, flash, render_template_string
+from flask import Flask, request, redirect, url_for, session, render_template_string
 import sqlite3
 
 app = Flask(__name__)
@@ -32,9 +32,11 @@ def criar_tabela():
     conn.commit()
     conn.close()
 
-# ---------------- LOGIN ----------------
+# ---------------- LOGIN (TELA AZUL) ----------------
 @app.route("/", methods=["GET", "POST"])
 def login():
+    erro = ""
+
     if request.method == "POST":
         user = request.form["usuario"]
         senha = request.form["senha"]
@@ -43,17 +45,56 @@ def login():
             session["user"] = user
             session["tipo"] = USUARIOS[user]["tipo"]
             return redirect(url_for("painel"))
-
-        flash("Login inválido")
+        else:
+            erro = "Login inválido"
 
     return render_template_string("""
-    <h2>Login</h2>
-    <form method="post">
-        Usuário: <input name="usuario"><br>
-        Senha: <input name="senha" type="password"><br>
-        <button>Entrar</button>
-    </form>
-    """)
+    <style>
+    body {
+        margin:0;
+        font-family: Arial;
+        background: url('https://images.unsplash.com/photo-1554224155-6726b3ff858f') no-repeat center;
+        background-size: cover;
+    }
+    .box {
+        width:300px;
+        margin:100px auto;
+        background:#1e5aa8;
+        padding:30px;
+        color:white;
+        border-radius:10px;
+    }
+    input {
+        width:100%;
+        padding:10px;
+        margin:10px 0;
+    }
+    button {
+        width:100%;
+        padding:10px;
+        background:white;
+        border:none;
+        font-weight:bold;
+    }
+    </style>
+
+    <div class="box">
+        <h2>Work Meeting</h2>
+        <p>Olá, seja bem vindos!</p>
+
+        <form method="post">
+            Login
+            <input name="usuario">
+
+            Senha
+            <input type="password" name="senha">
+
+            <button>Acessar</button>
+        </form>
+
+        <p style="color:yellow;">{{erro}}</p>
+    </div>
+    """, erro=erro)
 
 # ---------------- PAINEL ----------------
 @app.route("/painel")
@@ -62,8 +103,6 @@ def painel():
         return redirect(url_for("login"))
 
     conn = get_db()
-
-    # ADMIN vê tudo OU filtrado
     filtro = request.args.get("usuario")
 
     if session["tipo"] == "admin":
@@ -85,16 +124,15 @@ def painel():
     <a href="{{ url_for('logout') }}">Sair</a>
 
     {% if session['tipo'] == 'admin' %}
-        <h3>Filtrar por usuário</h3>
-        <form method="get">
-            <select name="usuario">
-                <option value="">Todos</option>
-                {% for u in usuarios %}
-                    <option value="{{u.usuario}}">{{u.usuario}}</option>
-                {% endfor %}
-            </select>
-            <button>Filtrar</button>
-        </form>
+    <form method="get">
+        <select name="usuario">
+            <option value="">Todos</option>
+            {% for u in usuarios %}
+                <option value="{{u.usuario}}">{{u.usuario}}</option>
+            {% endfor %}
+        </select>
+        <button>Filtrar</button>
+    </form>
     {% endif %}
 
     <h3>Nova reunião</h3>
@@ -111,7 +149,7 @@ def painel():
     {% for r in reunioes %}
         <li>
             {{r.nome}} - {{r.tema}} - {{r.usuario}}
-            <form method="post" action="{{ url_for('excluir', id=r.id) }}" style="display:inline;">
+            <form method="post" action="{{ url_for('excluir', id=r.id) }}">
                 <button>Excluir</button>
             </form>
         </li>
