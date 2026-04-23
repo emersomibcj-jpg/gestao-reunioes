@@ -49,7 +49,24 @@ def criar_tabelas():
 criar_tabelas()
 
 
-# 🔥 CORRIGIDO: ADMIN só vê se filtrar usuário
+@app.context_processor
+def inject_user():
+    return {
+        "usuario_nome": session.get("usuario_nome", ""),
+        "usuario_login": session.get("usuario_login", ""),
+        "usuario_tipo": session.get("usuario_tipo", ""),
+        "usuario_filtro": session.get("usuario_filtro", "")
+    }
+
+
+def pode_acessar_reuniao(reuniao):
+    if not reuniao:
+        return False
+    if session.get("usuario_tipo") == "admin":
+        return True
+    return reuniao["usuario"] == session.get("usuario_login")
+
+
 def buscar_reunioes(filtro_usuario=None):
     usuario = session.get("usuario_login")
     tipo = session.get("usuario_tipo")
@@ -61,8 +78,6 @@ def buscar_reunioes(filtro_usuario=None):
         if filtro_usuario:
             consulta += " AND usuario=?"
             params.append(filtro_usuario)
-        else:
-            consulta += " AND 1=0"  # 👈 não mostra nada
     else:
         consulta += " AND usuario=?"
         params.append(usuario)
@@ -72,11 +87,9 @@ def buscar_reunioes(filtro_usuario=None):
     conn = get_db()
     rows = conn.execute(consulta, params).fetchall()
     conn.close()
-
     return rows
 
 
-# 🔥 CORRIGIDO: contadores respeitam filtro
 def contar_status(filtro_usuario=None):
     usuario = session.get("usuario_login")
     tipo = session.get("usuario_tipo")
@@ -91,7 +104,10 @@ def contar_status(filtro_usuario=None):
             pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (filtro_usuario,)).fetchone()[0]
             concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (filtro_usuario,)).fetchone()[0]
         else:
-            total = andamento = pausa = concluida = 0
+            total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
+            andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
+            pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
+            concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
     else:
         total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
         andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
@@ -104,15 +120,19 @@ def contar_status(filtro_usuario=None):
 
 @app.route("/", methods=["GET", "POST"])
 def login():
+    if session.get("logado"):
+        return redirect(url_for("painel"))
+
     if request.method == "POST":
-        user = request.form["usuario"].lower()
-        senha = request.form["senha"]
+        user = request.form["usuario"].strip().lower()
+        senha = request.form["senha"].strip()
 
         if user in USUARIOS and USUARIOS[user]["senha"] == senha:
             session["logado"] = True
             session["usuario_login"] = user
             session["usuario_nome"] = USUARIOS[user]["nome"]
             session["usuario_tipo"] = USUARIOS[user]["tipo"]
+            session["usuario_filtro"] = ""
             return redirect(url_for("painel"))
 
         flash("Login inválido", "erro")
@@ -126,13 +146,13 @@ def logout():
     return redirect(url_for("login"))
 
 
-# 🔥 AJUSTADO: aceita edição futuramente
 @app.route("/painel")
 def painel():
     if not session.get("logado"):
         return redirect(url_for("login"))
 
     editar_id = request.args.get("editar_id")
+    filtro_usuario = session.get("usuario_filtro", "")
 
     registro_edicao = None
     if editar_id:
@@ -140,8 +160,12 @@ def painel():
         registro_edicao = conn.execute("SELECT * FROM reunioes WHERE id=?", (editar_id,)).fetchone()
         conn.close()
 
-    reunioes = buscar_reunioes()
-    indicadores = contar_status()
+        if not pode_acessar_reuniao(registro_edicao):
+            flash("Você não tem permissão para editar esta reunião.", "erro")
+            return redirect(url_for("painel"))
+
+    reunioes = buscar_reunioes(filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None)
+    indicadores = contar_status(filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None)
 
     return render_template(
         "painel.html",
@@ -165,71 +189,74 @@ def ver_usuario(usuario):
     if session.get("usuario_tipo") != "admin":
         return redirect(url_for("painel"))
 
-    reunioes = buscar_reunioes(filtro_usuario=usuario)
-    indicadores = contar_status(filtro_usuario=usuario)
+    if usuario not in USUARIOS:
+        flash("Usuário não encontrado.", "erro")
+        return redirect(url_for("painel"))
 
-    return render_template(
-        "painel.html",
-        reunioes=reunioes,
-        indicadores=indicadores,
-        status_lista=STATUS_LISTA,
-        usuarios=USUARIOS,
-        busca="",
-        campo="Todos",
-        data_ini="",
-        data_fim="",
-        registro_edicao=None
-    )
+    session["usuario_filtro"] = usuario
+    return redirect(url_for("painel"))
 
 
-# 🔥 AGORA SUPORTA EDITAR E CRIAR
+@app.route("/limpar-filtro")
+def limpar_filtro():
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    if session.get("usuario_tipo") == "admin":
+        session["usuario_filtro"] = ""
+
+    return redirect(url_for("painel"))
+
+
 @app.route("/salvar", methods=["POST"])
 def salvar():
     if not session.get("logado"):
         return redirect(url_for("login"))
 
-    usuario = session.get("usuario_login")
-    reuniao_id = request.form.get("reuniao_id")
+    usuario_logado = session.get("usuario_login")
+    reuniao_id = request.form.get("reuniao_id", "").strip()
+
+    nome = request.form.get("nome", "").strip()
+    tema = request.form.get("tema", "").strip()
+    data = request.form.get("data", "").strip()
+    horario = request.form.get("horario", "").strip()
+    participantes = request.form.get("participantes", "").strip()
+    status = request.form.get("status", "").strip()
+    pautas = request.form.get("pautas", "").strip()
+    observacoes = request.form.get("observacoes", "").strip()
+
+    if not nome or not tema or not data:
+        flash("Preencha nome, tema e data.", "erro")
+        return redirect(url_for("painel"))
 
     conn = get_db()
 
     if reuniao_id:
-        # EDITAR
+        reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+        if not pode_acessar_reuniao(reuniao):
+            conn.close()
+            flash("Você não tem permissão para editar esta reunião.", "erro")
+            return redirect(url_for("painel"))
+
         conn.execute("""
             UPDATE reunioes
             SET nome=?, tema=?, data_reuniao=?, horario=?, participantes=?, status=?, pautas=?, observacoes=?
             WHERE id=?
         """, (
-            request.form["nome"],
-            request.form["tema"],
-            request.form["data"],
-            request.form["horario"],
-            request.form["participantes"],
-            request.form["status"],
-            request.form["pautas"],
-            request.form["observacoes"],
-            reuniao_id
+            nome, tema, data, horario, participantes, status, pautas, observacoes, reuniao_id
         ))
+        flash("Reunião atualizada com sucesso.", "sucesso")
     else:
-        # NOVO
         conn.execute("""
             INSERT INTO reunioes (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            usuario,
-            request.form["nome"],
-            request.form["tema"],
-            request.form["data"],
-            request.form["horario"],
-            request.form["participantes"],
-            request.form["status"],
-            request.form["pautas"],
-            request.form["observacoes"]
+            usuario_logado, nome, tema, data, horario, participantes, status, pautas, observacoes
         ))
+        flash("Reunião cadastrada com sucesso.", "sucesso")
 
     conn.commit()
     conn.close()
-
     return redirect(url_for("painel"))
 
 
@@ -239,10 +266,18 @@ def excluir(reuniao_id):
         return redirect(url_for("login"))
 
     conn = get_db()
+    reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+
+    if not pode_acessar_reuniao(reuniao):
+        conn.close()
+        flash("Você não tem permissão para excluir esta reunião.", "erro")
+        return redirect(url_for("painel"))
+
     conn.execute("DELETE FROM reunioes WHERE id=?", (reuniao_id,))
     conn.commit()
     conn.close()
 
+    flash("Reunião excluída com sucesso.", "sucesso")
     return redirect(url_for("painel"))
 
 
@@ -255,8 +290,12 @@ def detalhes(reuniao_id):
     reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
     conn.close()
 
+    if not pode_acessar_reuniao(reuniao):
+        flash("Você não tem permissão para visualizar esta reunião.", "erro")
+        return redirect(url_for("painel"))
+
     return render_template("detalhes.html", reuniao=reuniao)
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
