@@ -1,23 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, request, redirect, url_for, session, flash, render_template_string
 import sqlite3
-from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "chave_super_secreta_reunioes"
+app.secret_key = "chave_super_secreta"
 
-DB_NAME = "reunioes_v2.db"
+DB_NAME = "reunioes.db"
 
 USUARIOS = {
     "emerson": {"senha": "1234", "nome": "Emerson", "tipo": "admin"},
     "davi": {"senha": "1234", "nome": "Davi", "tipo": "usuario"},
     "matthews": {"senha": "1234", "nome": "Matthews", "tipo": "usuario"},
-    "giovanne": {"senha": "1234", "nome": "Giovanne", "tipo": "usuario"},
-    "rebecca": {"senha": "1234", "nome": "Rebecca", "tipo": "usuario"},
-    "liliane": {"senha": "1234", "nome": "Liliane", "tipo": "usuario"},
-    "maya": {"senha": "1234", "nome": "Maya", "tipo": "usuario"}
 }
 
-STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
+STATUS_LISTA = ["Planejada", "Em andamento", "Concluída"]
 
 
 def get_db():
@@ -26,180 +21,138 @@ def get_db():
     return conn
 
 
-def criar_tabelas():
+def criar_tabela():
     conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS reunioes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT NOT NULL,
-            nome TEXT NOT NULL,
-            tema TEXT NOT NULL,
-            data_reuniao TEXT NOT NULL,
-            horario TEXT,
-            participantes TEXT,
-            status TEXT,
-            pautas TEXT,
-            observacoes TEXT,
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+            usuario TEXT,
+            nome TEXT,
+            tema TEXT,
+            data TEXT,
+            status TEXT
         )
     """)
     conn.commit()
     conn.close()
 
 
-# 🔥 ISSO AQUI RESOLVE SEU ERRO
-criar_tabelas()
+criar_tabela()
 
 
-def validar_data(texto, obrigatoria=True):
-    if not texto.strip():
-        return not obrigatoria
-    try:
-        datetime.strptime(texto.strip(), "%d/%m/%Y")
-        return True
-    except ValueError:
-        return False
-
-
-def validar_horario(texto):
-    if not texto.strip():
-        return True
-    try:
-        datetime.strptime(texto.strip(), "%H:%M")
-        return True
-    except ValueError:
-        return False
-
-
-def contar_status():
+def buscar_reunioes(usuario_filtro=None):
     usuario = session.get("usuario_login")
     tipo = session.get("usuario_tipo")
 
-    conn = get_db()
-    cur = conn.cursor()
-
-    if tipo == "admin":
-        total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
-        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
-        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
-        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
-    else:
-        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
-        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
-        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (usuario,)).fetchone()[0]
-        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (usuario,)).fetchone()[0]
-
-    conn.close()
-    return {"total": total, "andamento": andamento, "pausa": pausa, "concluida": concluida}
-
-
-def buscar_reunioes():
-    usuario = session.get("usuario_login")
-    tipo = session.get("usuario_tipo")
-
-    consulta = "SELECT * FROM reunioes WHERE 1=1"
+    query = "SELECT * FROM reunioes WHERE 1=1"
     params = []
 
-    if tipo != "admin":
-        consulta += " AND usuario=?"
+    if tipo == "admin":
+        if usuario_filtro:
+            query += " AND usuario=?"
+            params.append(usuario_filtro)
+    else:
+        query += " AND usuario=?"
         params.append(usuario)
 
-    consulta += " ORDER BY id DESC"
+    query += " ORDER BY id DESC"
 
     conn = get_db()
-    rows = conn.execute(consulta, params).fetchall()
+    dados = conn.execute(query, params).fetchall()
     conn.close()
-
-    return rows
+    return dados
 
 
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = request.form["usuario"].lower()
+        user = request.form["usuario"]
         senha = request.form["senha"]
 
         if user in USUARIOS and USUARIOS[user]["senha"] == senha:
             session["logado"] = True
             session["usuario_login"] = user
-            session["usuario_nome"] = USUARIOS[user]["nome"]
             session["usuario_tipo"] = USUARIOS[user]["tipo"]
-            return redirect(url_for("painel"))
+            return redirect("/painel")
 
-        flash("Login inválido", "erro")
+        flash("Login inválido")
 
-    return render_template("login.html")
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
+    return """
+    <h2>Login</h2>
+    <form method="post">
+        Usuário: <input name="usuario"><br>
+        Senha: <input type="password" name="senha"><br>
+        <button>Entrar</button>
+    </form>
+    """
 
 
 @app.route("/painel")
 def painel():
     if not session.get("logado"):
-        return redirect(url_for("login"))
+        return redirect("/")
 
-    reunioes = buscar_reunioes()
-    indicadores = contar_status()
+    usuario_filtro = request.args.get("usuario")
+    reunioes = buscar_reunioes(usuario_filtro)
 
-    return render_template("painel.html", reunioes=reunioes, indicadores=indicadores, status_lista=STATUS_LISTA)
+    return render_template_string("""
+    <h2>Painel</h2>
+
+    {% if session["usuario_tipo"] == "admin" %}
+    <form method="get">
+        <select name="usuario" onchange="this.form.submit()">
+            <option value="">Todos</option>
+            {% for u in usuarios %}
+            <option value="{{u}}" {% if u == usuario_filtro %}selected{% endif %}>{{u}}</option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+
+    <h3>Nova reunião</h3>
+    <form method="post" action="/salvar">
+        Nome: <input name="nome"><br>
+        Tema: <input name="tema"><br>
+        Data: <input name="data"><br>
+        Status: <input name="status"><br>
+        <button>Salvar</button>
+    </form>
+
+    <h3>Reuniões</h3>
+    <ul>
+    {% for r in reunioes %}
+        <li>{{r["nome"]}} - {{r["usuario"]}} - {{r["status"]}}</li>
+    {% endfor %}
+    </ul>
+
+    <a href="/logout">Sair</a>
+    """, reunioes=reunioes, usuarios=USUARIOS.keys(), usuario_filtro=usuario_filtro)
 
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
-    if not session.get("logado"):
-        return redirect(url_for("login"))
-
     usuario = session.get("usuario_login")
 
     nome = request.form["nome"]
     tema = request.form["tema"]
     data = request.form["data"]
-    horario = request.form["horario"]
-    participantes = request.form["participantes"]
     status = request.form["status"]
-    pautas = request.form["pautas"]
-    observacoes = request.form["observacoes"]
 
     conn = get_db()
-
-    conn.execute("""
-        INSERT INTO reunioes (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (usuario, nome, tema, data, horario, participantes, status, pautas, observacoes))
-
+    conn.execute(
+        "INSERT INTO reunioes (usuario, nome, tema, data, status) VALUES (?, ?, ?, ?, ?)",
+        (usuario, nome, tema, data, status)
+    )
     conn.commit()
     conn.close()
 
-    return redirect(url_for("painel"))
+    return redirect("/painel")
 
 
-@app.route("/excluir/<int:reuniao_id>", methods=["POST"])
-def excluir(reuniao_id):
-    if not session.get("logado"):
-        return redirect(url_for("login"))
-
-    conn = get_db()
-    conn.execute("DELETE FROM reunioes WHERE id=?", (reuniao_id,))
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("painel"))
-
-
-@app.route("/detalhes/<int:reuniao_id>")
-def detalhes(reuniao_id):
-    if not session.get("logado"):
-        return redirect(url_for("login"))
-
-    conn = get_db()
-    reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
-    conn.close()
-
-    return render_template("detalhes.html", reuniao=reuniao)
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
 
 if __name__ == "__main__":
