@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block title %}Painel - Gestão de Reuniões{% endblock %}
+
 {% block body %}
 <div class="app-shell">
     <header class="topbar">
@@ -45,7 +46,6 @@
     <section class="content-grid">
         <div class="left-panel">
 
-            <!-- 🔥 MENU DE USUÁRIOS (ADICIONADO AQUI) -->
             {% if session.usuario_tipo == "admin" %}
             <div class="panel">
                 <div class="panel-title">Filtrar por usuário</div>
@@ -64,7 +64,7 @@
                     <div class="row">
                         <div class="field grow">
                             <label>Pesquisar</label>
-                            <input type="text" name="busca" value="{{ busca }}" placeholder="Nome, tema, participantes...">
+                            <input type="text" name="busca" value="{{ busca }}">
                         </div>
                         <div class="field">
                             <label>Campo</label>
@@ -79,89 +79,71 @@
                     <div class="row">
                         <div class="field">
                             <label>Data inicial</label>
-                            <input type="text" name="data_ini" value="{{ data_ini }}" placeholder="dd/mm/aaaa">
+                            <input type="text" name="data_ini" value="{{ data_ini }}">
                         </div>
                         <div class="field">
                             <label>Data final</label>
-                            <input type="text" name="data_fim" value="{{ data_fim }}" placeholder="dd/mm/aaaa">
+                            <input type="text" name="data_fim" value="{{ data_fim }}">
                         </div>
                     </div>
 
                     <div class="row actions">
                         <button class="btn btn-primary" type="submit">Buscar</button>
-                        <a class="btn btn-muted" href="{{ url_for('painel') }}">Limpar filtros</a>
-                        <a class="btn btn-muted" href="{{ url_for('painel') }}">Nova reunião</a>
+                        <a class="btn btn-muted" href="{{ url_for('painel') }}">Limpar</a>
                     </div>
                 </form>
             </div>
 
             <div class="panel table-panel">
-                <div class="panel-title">Reuniões cadastradas</div>
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>ID</th>
-                                <th>Nome da reunião</th>
-                                <th>Tema</th>
-                                <th>Data</th>
-                                <th>Horário</th>
-                                <th>Status</th>
-                                <th>Participantes</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in reunioes %}
-                            {% set status_lower = (r.status or '')|lower %}
-                            <tr>
-                                <td class="status-dot-cell">
-                                    {% if status_lower == 'em andamento' %}
-                                        <span class="dot yellow"></span>
-                                    {% elif status_lower == 'em pausa' %}
-                                        <span class="dot red"></span>
-                                    {% elif status_lower in ['concluída','concluida'] %}
-                                        <span class="dot green"></span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ r.id }}</td>
-                                <td>{{ r.nome }}</td>
-                                <td>{{ r.tema }}</td>
-                                <td>{{ r.data_reuniao }}</td>
-                                <td>{{ r.horario or '' }}</td>
-                                <td><span class="status-pill">{{ r.status or '' }}</span></td>
-                                <td>{{ r.participantes or '' }}</td>
-                                <td class="actions-cell">
-                                    <a class="mini-link" href="{{ url_for('detalhes', reuniao_id=r.id) }}">Visualizar</a>
-                                    <a class="mini-link" href="{{ url_for('painel', editar_id=r.id, busca=busca, campo=campo, data_ini=data_ini, data_fim=data_fim) }}">Editar</a>
-                                    <form method="post" action="{{ url_for('excluir', reuniao_id=r.id) }}" onsubmit="return confirm('Deseja realmente excluir esta reunião?');">
-                                        <button type="submit" class="mini-link danger">Excluir</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="9" class="empty-row">Nenhuma reunião encontrada.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="legend">
-                    <span><i class="dot yellow"></i> Em andamento</span>
-                    <span><i class="dot red"></i> Em pausa</span>
-                    <span><i class="dot green"></i> Concluída</span>
-                </div>
+                <div class="panel-title">Reuniões</div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reunioes %}
+                        <tr>
+                            <td>{{ r.id }}</td>
+                            <td>{{ r.nome }}</td>
+                            <td>{{ r.status }}</td>
+                            <td>
+                                <a href="{{ url_for('detalhes', reuniao_id=r.id) }}">Ver</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4">Nenhuma reunião encontrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
+
         </div>
 
         <div class="right-panel">
             <div class="panel form-panel">
-                <div class="panel-title">{{ "Cadastro e edição" if registro_edicao else "Cadastro de reunião" }}</div>
+                <div class="panel-title">
+                    {{ "Editar reunião" if registro_edicao else "Nova reunião" }}
+                </div>
 
-                <form method="post" action="{{ url_for('salvar') }}" class="meeting-form">
+                <form method="post" action="{{ url_for('salvar') }}">
                     <input type="hidden" name="reuniao_id" value="{{ registro_edicao.id if registro_edicao else '' }}">
 
-                    <!-- restante permanece igual -->
+                    <input type="text" name="nome" placeholder="Nome"
+                           value="{{ registro_edicao.nome if registro_edicao else '' }}">
+
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </form>
+
+            </div>
+        </div>
+    </section>
+</div>
+
+{% endblock %}
