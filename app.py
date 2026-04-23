@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_reunioes"
@@ -46,7 +47,89 @@ def criar_tabelas():
     conn.close()
 
 
-criar_tabelas()
+def converter_data_para_input(data_texto):
+    """
+    Converte dd/mm/aaaa para aaaa-mm-dd, para funcionar no input type="date".
+    Se já estiver em aaaa-mm-dd, mantém.
+    """
+    if not data_texto:
+        return ""
+
+    data_texto = str(data_texto).strip()
+
+    try:
+        return datetime.strptime(data_texto, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    try:
+        return datetime.strptime(data_texto, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    return ""
+
+
+def converter_data_para_banco(data_texto):
+    """
+    Garante que a data fique salva em aaaa-mm-dd.
+    """
+    if not data_texto:
+        return ""
+
+    data_texto = str(data_texto).strip()
+
+    try:
+        return datetime.strptime(data_texto, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    try:
+        return datetime.strptime(data_texto, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    return data_texto
+
+
+def formatar_data_para_exibicao(data_texto):
+    """
+    Mostra a data no formato dd/mm/aaaa na tabela e detalhes.
+    """
+    if not data_texto:
+        return ""
+
+    data_texto = str(data_texto).strip()
+
+    try:
+        return datetime.strptime(data_texto, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        pass
+
+    try:
+        return datetime.strptime(data_texto, "%d/%m/%Y").strftime("%d/%m/%Y")
+    except ValueError:
+        pass
+
+    return data_texto
+
+
+def preparar_reuniao_para_formulario(reuniao):
+    if not reuniao:
+        return None
+
+    registro = dict(reuniao)
+    registro["data_reuniao"] = converter_data_para_input(registro.get("data_reuniao", ""))
+    return registro
+
+
+def preparar_reunioes_para_lista(reunioes):
+    lista = []
+    for reuniao in reunioes:
+        item = dict(reuniao)
+        item["data_reuniao"] = formatar_data_para_exibicao(item.get("data_reuniao", ""))
+        lista.append(item)
+    return lista
 
 
 @app.context_processor
@@ -62,8 +145,10 @@ def inject_user():
 def pode_acessar_reuniao(reuniao):
     if not reuniao:
         return False
+
     if session.get("usuario_tipo") == "admin":
         return True
+
     return reuniao["usuario"] == session.get("usuario_login")
 
 
@@ -76,10 +161,10 @@ def buscar_reunioes(filtro_usuario=None):
 
     if tipo == "admin":
         if filtro_usuario:
-            consulta += " AND usuario=?"
+            consulta += " AND usuario = ?"
             params.append(filtro_usuario)
     else:
-        consulta += " AND usuario=?"
+        consulta += " AND usuario = ?"
         params.append(usuario)
 
     consulta += " ORDER BY id DESC"
@@ -87,6 +172,7 @@ def buscar_reunioes(filtro_usuario=None):
     conn = get_db()
     rows = conn.execute(consulta, params).fetchall()
     conn.close()
+
     return rows
 
 
@@ -99,23 +185,53 @@ def contar_status(filtro_usuario=None):
 
     if tipo == "admin":
         if filtro_usuario:
-            total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (filtro_usuario,)).fetchone()[0]
-            andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (filtro_usuario,)).fetchone()[0]
-            pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (filtro_usuario,)).fetchone()[0]
-            concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (filtro_usuario,)).fetchone()[0]
+            total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario = ?", (filtro_usuario,)).fetchone()[0]
+            andamento = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) = 'em andamento'",
+                (filtro_usuario,)
+            ).fetchone()[0]
+            pausa = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) = 'em pausa'",
+                (filtro_usuario,)
+            ).fetchone()[0]
+            concluida = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) IN ('concluída', 'concluida')",
+                (filtro_usuario,)
+            ).fetchone()[0]
         else:
             total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
-            andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
-            pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
-            concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
+            andamento = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE lower(status) = 'em andamento'"
+            ).fetchone()[0]
+            pausa = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE lower(status) = 'em pausa'"
+            ).fetchone()[0]
+            concluida = cur.execute(
+                "SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída', 'concluida')"
+            ).fetchone()[0]
     else:
-        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
-        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
-        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (usuario,)).fetchone()[0]
-        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (usuario,)).fetchone()[0]
+        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario = ?", (usuario,)).fetchone()[0]
+        andamento = cur.execute(
+            "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) = 'em andamento'",
+            (usuario,)
+        ).fetchone()[0]
+        pausa = cur.execute(
+            "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) = 'em pausa'",
+            (usuario,)
+        ).fetchone()[0]
+        concluida = cur.execute(
+            "SELECT COUNT(*) FROM reunioes WHERE usuario = ? AND lower(status) IN ('concluída', 'concluida')",
+            (usuario,)
+        ).fetchone()[0]
 
     conn.close()
-    return {"total": total, "andamento": andamento, "pausa": pausa, "concluida": concluida}
+
+    return {
+        "total": total,
+        "andamento": andamento,
+        "pausa": pausa,
+        "concluida": concluida
+    }
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -124,8 +240,8 @@ def login():
         return redirect(url_for("painel"))
 
     if request.method == "POST":
-        user = request.form["usuario"].strip().lower()
-        senha = request.form["senha"].strip()
+        user = request.form.get("usuario", "").strip().lower()
+        senha = request.form.get("senha", "").strip()
 
         if user in USUARIOS and USUARIOS[user]["senha"] == senha:
             session["logado"] = True
@@ -157,15 +273,23 @@ def painel():
     registro_edicao = None
     if editar_id:
         conn = get_db()
-        registro_edicao = conn.execute("SELECT * FROM reunioes WHERE id=?", (editar_id,)).fetchone()
+        reuniao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (editar_id,)).fetchone()
         conn.close()
 
-        if not pode_acessar_reuniao(registro_edicao):
+        if not pode_acessar_reuniao(reuniao):
             flash("Você não tem permissão para editar esta reunião.", "erro")
             return redirect(url_for("painel"))
 
-    reunioes = buscar_reunioes(filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None)
-    indicadores = contar_status(filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None)
+        registro_edicao = preparar_reuniao_para_formulario(reuniao)
+
+    reunioes_raw = buscar_reunioes(
+        filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None
+    )
+    reunioes = preparar_reunioes_para_lista(reunioes_raw)
+
+    indicadores = contar_status(
+        filtro_usuario=filtro_usuario if session.get("usuario_tipo") == "admin" else None
+    )
 
     return render_template(
         "painel.html",
@@ -218,7 +342,7 @@ def salvar():
 
     nome = request.form.get("nome", "").strip()
     tema = request.form.get("tema", "").strip()
-    data = request.form.get("data", "").strip()
+    data = converter_data_para_banco(request.form.get("data", "").strip())
     horario = request.form.get("horario", "").strip()
     participantes = request.form.get("participantes", "").strip()
     status = request.form.get("status", "").strip()
@@ -232,7 +356,7 @@ def salvar():
     conn = get_db()
 
     if reuniao_id:
-        reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+        reuniao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (reuniao_id,)).fetchone()
         if not pode_acessar_reuniao(reuniao):
             conn.close()
             flash("Você não tem permissão para editar esta reunião.", "erro")
@@ -240,8 +364,8 @@ def salvar():
 
         conn.execute("""
             UPDATE reunioes
-            SET nome=?, tema=?, data_reuniao=?, horario=?, participantes=?, status=?, pautas=?, observacoes=?
-            WHERE id=?
+            SET nome = ?, tema = ?, data_reuniao = ?, horario = ?, participantes = ?, status = ?, pautas = ?, observacoes = ?
+            WHERE id = ?
         """, (
             nome, tema, data, horario, participantes, status, pautas, observacoes, reuniao_id
         ))
@@ -257,6 +381,7 @@ def salvar():
 
     conn.commit()
     conn.close()
+
     return redirect(url_for("painel"))
 
 
@@ -266,14 +391,14 @@ def excluir(reuniao_id):
         return redirect(url_for("login"))
 
     conn = get_db()
-    reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+    reuniao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (reuniao_id,)).fetchone()
 
     if not pode_acessar_reuniao(reuniao):
         conn.close()
         flash("Você não tem permissão para excluir esta reunião.", "erro")
         return redirect(url_for("painel"))
 
-    conn.execute("DELETE FROM reunioes WHERE id=?", (reuniao_id,))
+    conn.execute("DELETE FROM reunioes WHERE id = ?", (reuniao_id,))
     conn.commit()
     conn.close()
 
@@ -287,15 +412,19 @@ def detalhes(reuniao_id):
         return redirect(url_for("login"))
 
     conn = get_db()
-    reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+    reuniao = conn.execute("SELECT * FROM reunioes WHERE id = ?", (reuniao_id,)).fetchone()
     conn.close()
 
     if not pode_acessar_reuniao(reuniao):
         flash("Você não tem permissão para visualizar esta reunião.", "erro")
         return redirect(url_for("painel"))
 
-    return render_template("detalhes.html", reuniao=reuniao)
+    reuniao_formatada = dict(reuniao)
+    reuniao_formatada["data_reuniao"] = formatar_data_para_exibicao(reuniao_formatada.get("data_reuniao", ""))
+
+    return render_template("detalhes.html", reuniao=reuniao_formatada)
 
 
 if __name__ == "__main__":
+    criar_tabelas()
     app.run()
