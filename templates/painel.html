@@ -85,7 +85,23 @@
                             <td>{{ r.data_reuniao }}</td>
                             <td>{{ r.status }}</td>
                             <td>
+
+                                <!-- VER -->
                                 <a href="{{ url_for('detalhes', reuniao_id=r.id) }}">Ver</a>
+
+                                <!-- EDITAR -->
+                                <a href="{{ url_for('painel', editar_id=r.id) }}">Editar</a>
+
+                                <!-- EXCLUIR -->
+                                <form method="post"
+                                      action="{{ url_for('excluir', reuniao_id=r.id) }}"
+                                      style="display:inline;">
+                                    <button type="submit"
+                                            onclick="return confirm('Deseja excluir esta reunião?')">
+                                        Excluir
+                                    </button>
+                                </form>
+
                             </td>
                         </tr>
                         {% else %}
@@ -166,9 +182,17 @@
                         <textarea name="observacoes">{{ registro_edicao.observacoes if registro_edicao else '' }}</textarea>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">
-                        Salvar
-                    </button>
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <button type="submit" class="btn btn-primary">
+                            Salvar
+                        </button>
+
+                        {% if registro_edicao %}
+                        <a href="{{ url_for('painel') }}" class="btn btn-muted">
+                            Cancelar
+                        </a>
+                        {% endif %}
+                    </div>
 
                 </form>
 
