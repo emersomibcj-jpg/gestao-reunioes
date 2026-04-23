@@ -3,6 +3,7 @@
 
 {% block body %}
 <div class="app-shell">
+
     <header class="topbar">
         <div>
             <h1>Gestão de Reuniões</h1>
@@ -12,104 +13,76 @@
     </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="alerts-stack">
+    {% if messages %}
+    <div class="alerts-stack">
         {% for category, message in messages %}
-          <div class="alert {{ category }}">{{ message }}</div>
+        <div class="alert {{ category }}">{{ message }}</div>
         {% endfor %}
-        </div>
-      {% endif %}
+    </div>
+    {% endif %}
     {% endwith %}
 
+    <!-- CARDS -->
     <section class="cards-grid">
         <div class="metric-card">
-            <div class="metric-title">Total de reuniões</div>
+            <div class="metric-title">Total</div>
             <div class="metric-value">{{ indicadores.total }}</div>
         </div>
-        <div class="metric-card accent-yellow">
-            <div class="metric-bar"></div>
+        <div class="metric-card">
             <div class="metric-title">Em andamento</div>
             <div class="metric-value">{{ indicadores.andamento }}</div>
         </div>
-        <div class="metric-card accent-red">
-            <div class="metric-bar"></div>
+        <div class="metric-card">
             <div class="metric-title">Em pausa</div>
             <div class="metric-value">{{ indicadores.pausa }}</div>
         </div>
-        <div class="metric-card accent-green">
-            <div class="metric-bar"></div>
+        <div class="metric-card">
             <div class="metric-title">Concluídas</div>
             <div class="metric-value">{{ indicadores.concluida }}</div>
         </div>
     </section>
 
     <section class="content-grid">
+
+        <!-- ESQUERDA -->
         <div class="left-panel">
 
             {% if session.usuario_tipo == "admin" %}
             <div class="panel">
                 <div class="panel-title">Filtrar por usuário</div>
-                <select class="input" onchange="if(this.value) window.location.href='/usuario/' + this.value">
-                    <option value="">Selecionar usuário</option>
+                <select class="input"
+                        onchange="if(this.value) window.location.href='/usuario/' + this.value">
+                    <option value="">Selecionar</option>
                     {% for user, dados in usuarios.items() %}
-                        <option value="{{ user }}">{{ dados.nome }}</option>
+                    <option value="{{ user }}">{{ dados.nome }}</option>
                     {% endfor %}
                 </select>
             </div>
             {% endif %}
 
-            <div class="panel">
-                <div class="panel-title">Pesquisa e filtros</div>
-                <form method="get" class="filters-form">
-                    <div class="row">
-                        <div class="field grow">
-                            <label>Pesquisar</label>
-                            <input type="text" name="busca" value="{{ busca }}">
-                        </div>
-                        <div class="field">
-                            <label>Campo</label>
-                            <select name="campo">
-                                {% for item in ["Todos","Nome","Tema","Data","Participantes","Status"] %}
-                                <option value="{{ item }}" {% if campo == item %}selected{% endif %}>{{ item }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="field">
-                            <label>Data inicial</label>
-                            <input type="text" name="data_ini" value="{{ data_ini }}">
-                        </div>
-                        <div class="field">
-                            <label>Data final</label>
-                            <input type="text" name="data_fim" value="{{ data_fim }}">
-                        </div>
-                    </div>
-
-                    <div class="row actions">
-                        <button class="btn btn-primary" type="submit">Buscar</button>
-                        <a class="btn btn-muted" href="{{ url_for('painel') }}">Limpar</a>
-                    </div>
-                </form>
-            </div>
-
+            <!-- TABELA -->
             <div class="panel table-panel">
                 <div class="panel-title">Reuniões</div>
+
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Nome</th>
+                            <th>Tema</th>
+                            <th>Data</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {% for r in reunioes %}
                         <tr>
                             <td>{{ r.id }}</td>
                             <td>{{ r.nome }}</td>
+                            <td>{{ r.tema }}</td>
+                            <td>{{ r.data_reuniao }}</td>
                             <td>{{ r.status }}</td>
                             <td>
                                 <a href="{{ url_for('detalhes', reuniao_id=r.id) }}">Ver</a>
@@ -117,7 +90,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4">Nenhuma reunião encontrada</td>
+                            <td colspan="6">Nenhuma reunião encontrada</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -126,24 +99,82 @@
 
         </div>
 
+        <!-- DIREITA (FORMULÁRIO) -->
         <div class="right-panel">
             <div class="panel form-panel">
+
                 <div class="panel-title">
                     {{ "Editar reunião" if registro_edicao else "Nova reunião" }}
                 </div>
 
                 <form method="post" action="{{ url_for('salvar') }}">
-                    <input type="hidden" name="reuniao_id" value="{{ registro_edicao.id if registro_edicao else '' }}">
 
-                    <input type="text" name="nome" placeholder="Nome"
-                           value="{{ registro_edicao.nome if registro_edicao else '' }}">
+                    <input type="hidden" name="reuniao_id"
+                           value="{{ registro_edicao.id if registro_edicao else '' }}">
 
-                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <div class="field">
+                        <label>Nome</label>
+                        <input type="text" name="nome" required
+                               value="{{ registro_edicao.nome if registro_edicao else '' }}">
+                    </div>
+
+                    <div class="field">
+                        <label>Tema</label>
+                        <input type="text" name="tema"
+                               value="{{ registro_edicao.tema if registro_edicao else '' }}">
+                    </div>
+
+                    <div class="row">
+                        <div class="field">
+                            <label>Data</label>
+                            <input type="date" name="data"
+                                   value="{{ registro_edicao.data_reuniao if registro_edicao else '' }}">
+                        </div>
+
+                        <div class="field">
+                            <label>Horário</label>
+                            <input type="time" name="horario"
+                                   value="{{ registro_edicao.horario if registro_edicao else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>Participantes</label>
+                        <input type="text" name="participantes"
+                               value="{{ registro_edicao.participantes if registro_edicao else '' }}">
+                    </div>
+
+                    <div class="field">
+                        <label>Status</label>
+                        <select name="status">
+                            {% for s in status_lista %}
+                            <option value="{{ s }}"
+                            {% if registro_edicao and registro_edicao.status == s %}selected{% endif %}>
+                                {{ s }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label>Pautas</label>
+                        <textarea name="pautas">{{ registro_edicao.pautas if registro_edicao else '' }}</textarea>
+                    </div>
+
+                    <div class="field">
+                        <label>Observações</label>
+                        <textarea name="observacoes">{{ registro_edicao.observacoes if registro_edicao else '' }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        Salvar
+                    </button>
+
                 </form>
 
             </div>
         </div>
+
     </section>
 </div>
-
 {% endblock %}
