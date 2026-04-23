@@ -1,206 +1,210 @@
-from flask import Flask, request, redirect, url_for, session, render_template_string
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
+from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "chave_super_secreta"
+app.secret_key = "chave_super_secreta_reunioes"
 
-DB = "reunioes.db"
+DB_NAME = "reunioes_v2.db"
 
 USUARIOS = {
-    "emerson": {"senha": "1234", "tipo": "admin"},
-    "davi": {"senha": "1234", "tipo": "usuario"},
+    "emerson": {"senha": "1234", "nome": "Emerson", "tipo": "admin"},
+    "davi": {"senha": "1234", "nome": "Davi", "tipo": "usuario"},
+    "matthews": {"senha": "1234", "nome": "Matthews", "tipo": "usuario"},
+    "giovanne": {"senha": "1234", "nome": "Giovanne", "tipo": "usuario"},
+    "rebecca": {"senha": "1234", "nome": "Rebecca", "tipo": "usuario"},
+    "liliane": {"senha": "1234", "nome": "Liliane", "tipo": "usuario"},
+    "maya": {"senha": "1234", "nome": "Maya", "tipo": "usuario"}
 }
 
-# ---------------- BANCO ----------------
+STATUS_LISTA = ["Planejada", "Em andamento", "Em pausa", "Concluída", "Adiada", "Cancelada"]
+
+
 def get_db():
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
-def criar_tabela():
+
+def criar_tabelas():
     conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS reunioes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT,
-            nome TEXT,
-            tema TEXT,
-            data TEXT,
-            status TEXT
+            usuario TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            tema TEXT NOT NULL,
+            data_reuniao TEXT NOT NULL,
+            horario TEXT,
+            participantes TEXT,
+            status TEXT,
+            pautas TEXT,
+            observacoes TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
     conn.close()
 
-# ---------------- LOGIN (TELA AZUL) ----------------
+
+criar_tabelas()
+
+
+def contar_status():
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    if tipo == "admin":
+        total = cur.execute("SELECT COUNT(*) FROM reunioes").fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em andamento'").fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status)='em pausa'").fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE lower(status) IN ('concluída','concluida')").fetchone()[0]
+    else:
+        total = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=?", (usuario,)).fetchone()[0]
+        andamento = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em andamento'", (usuario,)).fetchone()[0]
+        pausa = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status)='em pausa'", (usuario,)).fetchone()[0]
+        concluida = cur.execute("SELECT COUNT(*) FROM reunioes WHERE usuario=? AND lower(status) IN ('concluída','concluida')", (usuario,)).fetchone()[0]
+
+    conn.close()
+    return {"total": total, "andamento": andamento, "pausa": pausa, "concluida": concluida}
+
+
+def buscar_reunioes():
+    usuario = session.get("usuario_login")
+    tipo = session.get("usuario_tipo")
+
+    consulta = "SELECT * FROM reunioes WHERE 1=1"
+    params = []
+
+    if tipo != "admin":
+        consulta += " AND usuario=?"
+        params.append(usuario)
+
+    consulta += " ORDER BY id DESC"
+
+    conn = get_db()
+    rows = conn.execute(consulta, params).fetchall()
+    conn.close()
+
+    return rows
+
+
+# 🔥 NOVA FUNÇÃO (ADMIN VER POR USUÁRIO)
+def buscar_por_usuario(usuario):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM reunioes WHERE usuario=? ORDER BY id DESC",
+        (usuario,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
-    erro = ""
-
     if request.method == "POST":
-        user = request.form["usuario"]
+        user = request.form["usuario"].lower()
         senha = request.form["senha"]
 
         if user in USUARIOS and USUARIOS[user]["senha"] == senha:
-            session["user"] = user
-            session["tipo"] = USUARIOS[user]["tipo"]
+            session["logado"] = True
+            session["usuario_login"] = user
+            session["usuario_nome"] = USUARIOS[user]["nome"]
+            session["usuario_tipo"] = USUARIOS[user]["tipo"]
             return redirect(url_for("painel"))
-        else:
-            erro = "Login inválido"
 
-    return render_template_string("""
-    <style>
-    body {
-        margin:0;
-        font-family: Arial;
-        background: url('https://images.unsplash.com/photo-1554224155-6726b3ff858f') no-repeat center;
-        background-size: cover;
-    }
-    .box {
-        width:300px;
-        margin:100px auto;
-        background:#1e5aa8;
-        padding:30px;
-        color:white;
-        border-radius:10px;
-    }
-    input {
-        width:100%;
-        padding:10px;
-        margin:10px 0;
-    }
-    button {
-        width:100%;
-        padding:10px;
-        background:white;
-        border:none;
-        font-weight:bold;
-    }
-    </style>
+        flash("Login inválido", "erro")
 
-    <div class="box">
-        <h2>Work Meeting</h2>
-        <p>Olá, seja bem vindos!</p>
+    return render_template("login.html")
 
-        <form method="post">
-            Login
-            <input name="usuario">
 
-            Senha
-            <input type="password" name="senha">
-
-            <button>Acessar</button>
-        </form>
-
-        <p style="color:yellow;">{{erro}}</p>
-    </div>
-    """, erro=erro)
-
-# ---------------- PAINEL ----------------
-@app.route("/painel")
-def painel():
-    if "user" not in session:
-        return redirect(url_for("login"))
-
-    conn = get_db()
-    filtro = request.args.get("usuario")
-
-    if session["tipo"] == "admin":
-        if filtro:
-            reunioes = conn.execute("SELECT * FROM reunioes WHERE usuario=?", (filtro,)).fetchall()
-        else:
-            reunioes = conn.execute("SELECT * FROM reunioes").fetchall()
-
-        usuarios = conn.execute("SELECT DISTINCT usuario FROM reunioes").fetchall()
-    else:
-        reunioes = conn.execute("SELECT * FROM reunioes WHERE usuario=?", (session["user"],)).fetchall()
-        usuarios = []
-
-    conn.close()
-
-    return render_template_string("""
-    <h2>Painel</h2>
-
-    <a href="{{ url_for('logout') }}">Sair</a>
-
-    {% if session['tipo'] == 'admin' %}
-    <form method="get">
-        <select name="usuario">
-            <option value="">Todos</option>
-            {% for u in usuarios %}
-                <option value="{{u.usuario}}">{{u.usuario}}</option>
-            {% endfor %}
-        </select>
-        <button>Filtrar</button>
-    </form>
-    {% endif %}
-
-    <h3>Nova reunião</h3>
-    <form method="post" action="{{ url_for('salvar') }}">
-        Nome: <input name="nome"><br>
-        Tema: <input name="tema"><br>
-        Data: <input name="data"><br>
-        Status: <input name="status"><br>
-        <button>Salvar</button>
-    </form>
-
-    <h3>Reuniões</h3>
-    <ul>
-    {% for r in reunioes %}
-        <li>
-            {{r.nome}} - {{r.tema}} - {{r.usuario}}
-            <form method="post" action="{{ url_for('excluir', id=r.id) }}">
-                <button>Excluir</button>
-            </form>
-        </li>
-    {% endfor %}
-    </ul>
-    """, reunioes=reunioes, usuarios=usuarios)
-
-# ---------------- SALVAR ----------------
-@app.route("/salvar", methods=["POST"])
-def salvar():
-    if "user" not in session:
-        return redirect(url_for("login"))
-
-    conn = get_db()
-    conn.execute("""
-        INSERT INTO reunioes (usuario, nome, tema, data, status)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        session["user"],
-        request.form["nome"],
-        request.form["tema"],
-        request.form["data"],
-        request.form["status"]
-    ))
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("painel"))
-
-# ---------------- EXCLUIR ----------------
-@app.route("/excluir/<int:id>", methods=["POST"])
-def excluir(id):
-    conn = get_db()
-
-    if session["tipo"] == "admin":
-        conn.execute("DELETE FROM reunioes WHERE id=?", (id,))
-    else:
-        conn.execute("DELETE FROM reunioes WHERE id=? AND usuario=?", (id, session["user"]))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("painel"))
-
-# ---------------- LOGOUT ----------------
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ---------------- RUN ----------------
+
+@app.route("/painel")
+def painel():
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    reunioes = buscar_reunioes()
+    indicadores = contar_status()
+
+    return render_template("painel.html", reunioes=reunioes, indicadores=indicadores, status_lista=STATUS_LISTA)
+
+
+# 🔥 NOVA ROTA (ABA DO ADMIN)
+@app.route("/usuario/<nome>")
+def ver_usuario(nome):
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    if session.get("usuario_tipo") != "admin":
+        return redirect(url_for("painel"))
+
+    reunioes = buscar_por_usuario(nome)
+
+    return render_template("painel.html", reunioes=reunioes, indicadores=contar_status(), status_lista=STATUS_LISTA)
+
+
+@app.route("/salvar", methods=["POST"])
+def salvar():
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    usuario = session.get("usuario_login")
+
+    nome = request.form["nome"]
+    tema = request.form["tema"]
+    data = request.form["data"]
+    horario = request.form["horario"]
+    participantes = request.form["participantes"]
+    status = request.form["status"]
+    pautas = request.form["pautas"]
+    observacoes = request.form["observacoes"]
+
+    conn = get_db()
+
+    conn.execute("""
+        INSERT INTO reunioes (usuario, nome, tema, data_reuniao, horario, participantes, status, pautas, observacoes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (usuario, nome, tema, data, horario, participantes, status, pautas, observacoes))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("painel"))
+
+
+@app.route("/excluir/<int:reuniao_id>", methods=["POST"])
+def excluir(reuniao_id):
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    conn = get_db()
+    conn.execute("DELETE FROM reunioes WHERE id=?", (reuniao_id,))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("painel"))
+
+
+@app.route("/detalhes/<int:reuniao_id>")
+def detalhes(reuniao_id):
+    if not session.get("logado"):
+        return redirect(url_for("login"))
+
+    conn = get_db()
+    reuniao = conn.execute("SELECT * FROM reunioes WHERE id=?", (reuniao_id,)).fetchone()
+    conn.close()
+
+    return render_template("detalhes.html", reuniao=reuniao)
+
+
 if __name__ == "__main__":
-    criar_tabela()
     app.run(debug=True)
