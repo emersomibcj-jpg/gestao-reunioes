@@ -47,6 +47,10 @@ def criar_tabelas():
     conn.close()
 
 
+# Garante que a tabela exista ao iniciar o app
+criar_tabelas()
+
+
 def converter_data_para_input(data_texto):
     """
     Converte dd/mm/aaaa para aaaa-mm-dd, para funcionar no input type="date".
@@ -426,5 +430,4 @@ def detalhes(reuniao_id):
 
 
 if __name__ == "__main__":
-    criar_tabelas()
     app.run()
